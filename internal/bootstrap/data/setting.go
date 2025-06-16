@@ -96,8 +96,8 @@ func InitialSettings() []model.SettingItem {
 		{Key: conf.VERSION, Value: conf.Version, Type: conf.TypeString, Group: model.SITE, Flag: model.READONLY},
 		//{Key: conf.ApiUrl, Value: "", Type: conf.TypeString, Group: model.SITE},
 		//{Key: conf.BasePath, Value: "", Type: conf.TypeString, Group: model.SITE},
-		{Key: conf.SiteTitle, Value: "NiSweet.Cloud", Type: conf.TypeString, Group: model.SITE},
-		{Key: conf.Announcement, Value: "#### Welcome To NiSweet.Cloud", Type: conf.TypeText, Group: model.SITE},
+		{Key: conf.SiteTitle, Value: "iNoi.Cloud", Type: conf.TypeString, Group: model.SITE},
+		{Key: conf.Announcement, Value: "#### Welcome To iNoi.Cloud", Type: conf.TypeText, Group: model.SITE},
 		{Key: "pagination_type", Value: "all", Type: conf.TypeSelect, Options: "all,pagination,load_more,auto_load_more", Group: model.SITE},
 		{Key: "default_page_size", Value: "30", Type: conf.TypeNumber, Group: model.SITE},
 		{Key: conf.AllowIndexed, Value: "false", Type: conf.TypeBool, Group: model.SITE},
@@ -158,7 +158,7 @@ func InitialSettings() []model.SettingItem {
 		{Key: conf.OcrApi, Value: "https://api.example.com/ocr/file/json", Type: conf.TypeString, Group: model.GLOBAL}, // TODO: This can be replace by a community-hosted endpoint, see https://github.com/xhofe/ocr_api_server
 		{Key: conf.FilenameCharMapping, Value: `{"/": "|"}`, Type: conf.TypeText, Group: model.GLOBAL},
 		{Key: conf.ForwardDirectLinkParams, Value: "false", Type: conf.TypeBool, Group: model.GLOBAL},
-		{Key: conf.IgnoreDirectLinkParams, Value: "sign,nisweet_ts", Type: conf.TypeString, Group: model.GLOBAL},
+		{Key: conf.IgnoreDirectLinkParams, Value: "sign,inoi_ts", Type: conf.TypeString, Group: model.GLOBAL},
 		{Key: conf.WebauthnLoginEnabled, Value: "false", Type: conf.TypeBool, Group: model.GLOBAL, Flag: model.PUBLIC},
 
 		// single settings

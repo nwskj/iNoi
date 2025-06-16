@@ -15,7 +15,7 @@ import (
 
 func initUser() {
 	admin, err := op.GetAdmin()
-	adminPassword := "NiSweet"
+	adminPassword := "iNoi-PSWD"
 	envpass := os.Getenv("OPENLIST_ADMIN_PASSWORD")
 	if flags.Dev {
 		adminPassword = "admin"

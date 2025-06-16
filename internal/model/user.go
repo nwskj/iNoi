@@ -19,7 +19,7 @@ const (
 	ADMIN
 )
 
-const StaticHashSalt = "https://github.com/li-peifeng/NiSweet"
+const StaticHashSalt = "https://github.com/li-peifeng/inoi"
 
 type User struct {
 	ID       uint   `json:"id" gorm:"primaryKey"`                      // unique key

@@ -10,7 +10,7 @@ if [ "$1" = "dev" ]; then
 else
   git tag -d beta >/dev/null 2>&1 || true  # 静默忽略错误
   version=$(git describe --abbrev=0 --tags)
-  webVersion=$(wget -qO- -t1 -T2 "https://api.github.com/repos/li-peifeng/NiSweet-Frontend/releases/latest" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+  webVersion=$(wget -qO- -t1 -T2 "https://api.github.com/repos/li-peifeng/iNoi-Web/releases/latest" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
 fi
 
 echo "backend version: $version"
@@ -26,15 +26,15 @@ ldflags="\
 "
 
 FetchWebDev() {
-  curl -L https://codeload.github.com/li-peifeng/NiSweet-Dist/tar.gz/refs/heads/dev -o web-dist-dev.tar.gz
+  curl -L https://codeload.github.com/li-peifeng/iNoi-Dist/tar.gz/refs/heads/dev -o web-dist-dev.tar.gz
   tar -zxvf web-dist-dev.tar.gz
   rm -rf public/dist
-  mv -f NiSweet-Dist-dev/dist public
+  mv -f iNoi-Dist-dev/dist public
   rm -rf web-dist-dev web-dist-dev.tar.gz
 }
 
 FetchWebRelease() {
-  curl -L https://github.com/li-peifeng/NiSweet-Frontend/releases/latest/download/dist.tar.gz -o dist.tar.gz
+  curl -L https://github.com/li-peifeng/iNoi-Web/releases/latest/download/dist.tar.gz -o dist.tar.gz
   tar -zxvf dist.tar.gz
   rm -rf public/dist
   mv -f dist public
