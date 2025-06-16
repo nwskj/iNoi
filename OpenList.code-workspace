@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "OpenList-Frontend",
+			"path": "../OpenList-Frontend"
+		}
+	],
+	"settings": {}
+}
