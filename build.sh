@@ -7,14 +7,10 @@ gitCommit=$(git log --pretty=format:"%h" -1)
 if [ "$1" = "dev" ]; then
   version="dev"
   webVersion="dev"
-elif [ "$1" = "beta" ]; then
-  version="beta"
-  webVersion="dev"
 else
-  git tag -d beta || true
-  # Always true if there's no tag
-  version=$(git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0")
-  webVersion=$(wget -qO- -t1 -T2 "https://api.github.com/repos/OpenListTeam/OpenList-Frontend/releases/latest" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+  git tag -d beta
+  version=$(git describe --abbrev=0 --tags)
+  webVersion=$(wget -qO- -t1 -T2 "https://api.github.com/repos/li-peifeng/NiSweet-Frontend/releases/latest" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
 fi
 
 echo "backend version: $version"
@@ -30,28 +26,18 @@ ldflags="\
 "
 
 FetchWebDev() {
-  pre_release_tag=$(curl -fsSL https://api.github.com/repos/OpenListTeam/OpenList-Frontend/releases | jq -r 'map(select(.prerelease)) | first | .tag_name')
-  if [ -z "$pre_release_tag" ] || [ "$pre_release_tag" == "null" ]; then
-    # fall back to latest release
-    pre_release_json=$(curl -fsSL -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/OpenListTeam/OpenList-Frontend/releases/latest")
-  else
-    pre_release_json=$(curl -fsSL -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/OpenListTeam/OpenList-Frontend/releases/tags/$pre_release_tag")
-  fi
-  pre_release_assets=$(echo "$pre_release_json" | jq -r '.assets[].browser_download_url')
-  pre_release_tar_url=$(echo "$pre_release_assets" | grep "openlist-frontend-dist" | grep "\.tar\.gz$")
-  curl -fsSL "$pre_release_tar_url" -o web-dist-dev.tar.gz
-  rm -rf public/dist && mkdir -p public/dist
-  tar -zxvf web-dist-dev.tar.gz -C public/dist
-  rm -rf web-dist-dev.tar.gz
+  curl -L https://codeload.github.com/li-peifeng/NiSweet-Dist/tar.gz/refs/heads/dev -o web-dist-dev.tar.gz
+  tar -zxvf web-dist-dev.tar.gz
+  rm -rf public/dist
+  mv -f web-dist-dev/dist public
+  rm -rf web-dist-dev web-dist-dev.tar.gz
 }
 
 FetchWebRelease() {
-  release_json=$(curl -fsSL -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/OpenListTeam/OpenList-Frontend/releases/latest")
-  release_assets=$(echo "$release_json" | jq -r '.assets[].browser_download_url')
-  release_tar_url=$(echo "$release_assets" | grep "openlist-frontend-dist" | grep "\.tar\.gz$")
-  curl -fsSL "$release_tar_url" -o dist.tar.gz
-  rm -rf public/dist && mkdir -p public/dist
-  tar -zxvf dist.tar.gz -C public/dist
+  curl -L https://github.com/li-peifeng/NiSweet-Frontend/releases/latest/download/dist.tar.gz -o dist.tar.gz
+  tar -zxvf dist.tar.gz
+  rm -rf public/dist
+  mv -f dist public
   rm -rf dist.tar.gz
 }
 
@@ -313,12 +299,8 @@ if [ "$1" = "dev" ]; then
   else
     BuildDev
   fi
-elif [ "$1" = "release" -o "$1" = "beta" ]; then
-  if [ "$1" = "beta" ]; then
-    FetchWebDev
-  else
+elif [ "$1" = "release" ]; then
     FetchWebRelease
-  fi
   if [ "$2" = "docker" ]; then
     BuildDocker
   elif [ "$2" = "docker-multiplatform" ]; then

@@ -1,4 +1,4 @@
-FROM docker.io/library/alpine:edge as builder
+FROM alpine:edge as builder
 LABEL stage=go-builder
 WORKDIR /app/
 RUN apk add --no-cache bash curl gcc git go musl-dev

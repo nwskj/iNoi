@@ -68,7 +68,7 @@ func ErrorStrResp(c *gin.Context, str string, code int, l ...bool) {
 }
 
 func SuccessResp(c *gin.Context, data ...interface{}) {
-	SuccessWithMsgResp(c, "success", data...)
+	SuccessWithMsgResp(c, "完成", data...)
 }
 
 func SuccessWithMsgResp(c *gin.Context, msg string, data ...interface{}) {
