@@ -19,7 +19,7 @@
 
 #### 现更名为 iNoi （原 iSweet 项目不再更新）
 
-### 现上游仓库改为 OpenList。
+#### 现上游仓库改为 OpenList。
 
 #### Docker 镜像拉取 
 
