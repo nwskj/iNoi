@@ -5,12 +5,10 @@ RUN apk add --no-cache bash curl gcc git go musl-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY ./ ./
-RUN bash build.sh release docker-multiplatform
+RUN bash build.sh release docker
 
 FROM alpine:edge
 
-ARG TARGETARCH
-ARG TARGETVARIANT
 ARG INSTALL_FFMPEG=false
 ARG INSTALL_ARIA2=false
 LABEL MAINTAINER="OpenList"
@@ -31,10 +29,10 @@ RUN apk update && \
         sed -i 's|/root|/opt/aria2|g' /opt/aria2/.aria2/aria2.conf && \
         sed -i 's|/root|/opt/aria2|g' /opt/aria2/.aria2/script.conf && \
         touch /opt/aria2/.aria2/aria2.session && \
-        /opt/aria2/.aria2/tracker.sh ; \
+        /opt/aria2/.aria2/tracker.sh; \
     rm -rf /var/cache/apk/*
 
-COPY --chmod=755 --from=builder /app/build/linux/${TARGETARCH}${TARGETVARIANT:+/$TARGETVARIANT}/openlist ./
+COPY --chmod=755 /build/${TARGETPLATFORM}/openlist ./
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 RUN /entrypoint.sh version
 
