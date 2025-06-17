@@ -27,7 +27,7 @@
 
 - docker pull leolitaly/inoi:latest
 
-#### Docker Hub 访问有问题的可以用 ghcr.io 源拉取镜像
+#### ghcr.io 源拉取镜像
 
 - docker pull ghcr.io/li-peifeng/inoi:latest
 
