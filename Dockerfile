@@ -11,9 +11,9 @@ FROM alpine:edge
 
 ARG INSTALL_FFMPEG=false
 ARG INSTALL_ARIA2=false
-LABEL MAINTAINER="OpenList"
+LABEL MAINTAINER="iNoi"
 
-WORKDIR /opt/openlist/
+WORKDIR /opt/inoi/
 
 RUN apk update && \
     apk upgrade --no-cache && \
@@ -32,11 +32,11 @@ RUN apk update && \
         /opt/aria2/.aria2/tracker.sh; \
     rm -rf /var/cache/apk/*
 
-COPY --chmod=755 /build/${TARGETPLATFORM}/openlist ./
+COPY --chmod=755 /build/${TARGETPLATFORM}/iNoi ./
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 RUN /entrypoint.sh version
 
 ENV PUID=0 PGID=0 UMASK=022 RUN_ARIA2=${INSTALL_ARIA2}
-VOLUME /opt/openlist/data/
+VOLUME /opt/inoi/data/
 EXPOSE 5244 5245
 CMD [ "/entrypoint.sh" ]

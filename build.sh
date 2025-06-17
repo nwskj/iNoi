@@ -1,5 +1,5 @@
 set -e
-appName="openlist"
+appName="iNoi"
 builtAt="$(date +'%F %T %z')"
 gitAuthor="The OpenList Projects Contributors <inoi@peifeng.li>"
 gitCommit=$(git log --pretty=format:"%h" -1)
