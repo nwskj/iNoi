@@ -3,7 +3,7 @@ services:
   iNoi:
     restart: always
     volumes:
-      - "/etc/inoi:/opt/openlist/data"
+      - "/etc/inoi:/opt/inoi/data"
     ports:
       - "5244:5244"
       - "5245:5245"
