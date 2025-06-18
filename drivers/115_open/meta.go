@@ -11,11 +11,9 @@ type Addition struct {
 	// define other
 	OrderBy        string  `json:"order_by" type:"select" options:"file_name,file_size,user_utime,file_type"`
 	OrderDirection string  `json:"order_direction" type:"select" options:"asc,desc"`
-	LimitRate      float64 `json:"limit_rate" type:"float" default:"1" help:"limit all api request rate ([limit]r/1s)"`
-	UseOnlineAPI   bool    `json:"use_online_api" default:"true"`
-	APIAddress     string  `json:"api_url_address" default:"https://api.oplist.org/115cloud/renewapi"`
-	RefreshToken   string  `json:"refresh_token" required:"true"`
+	LimitRate      float64  `json:"limit_rate,string" type:"float" default:"1" help:"limit all api request rate ([limit]r/1s)"`
 	AccessToken    string  `json:"access_token" required:"true"`
+	RefreshToken   string  `json:"refresh_token" required:"true"`
 }
 
 var config = driver.Config{
