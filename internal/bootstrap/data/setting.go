@@ -136,7 +136,7 @@ func InitialSettings() []model.SettingItem {
 		//	"Google":"https://docs.google.com/gview?url=$url&embedded=true",
 		//}`, Type: conf.TypeText, Group: model.PREVIEW},
 		//		{Key: conf.PdfViewers, Value: `{
-		//	"pdf.js":"https://alist-org.github.io/pdf.js/web/viewer.html?file=$url"
+		//	"pdf.js":"https://openlistteam.github.io/pdf.js/web/viewer.html?file=$url"
 		//}`, Type: conf.TypeText, Group: model.PREVIEW},
 		{Key: "audio_cover", Value: "/images/audio.png", Type: conf.TypeString, Group: model.PREVIEW},
 		{Key: conf.AudioAutoplay, Value: "true", Type: conf.TypeBool, Group: model.PREVIEW},
