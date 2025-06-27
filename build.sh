@@ -4,11 +4,9 @@ builtAt="$(date +'%F %T %z')"
 gitAuthor="The OpenList Projects Contributors <inoi@peifeng.li>"
 gitCommit=$(git log --pretty=format:"%h" -1)
 
-githubAuthHeader=""
-githubAuthValue=""
+githubAuthArgs=""
 if [ -n "$GITHUB_TOKEN" ]; then
-  githubAuthHeader="--header"
-  githubAuthValue="Authorization: Bearer $GITHUB_TOKEN"
+  githubAuthArgs="--header \"Authorization: Bearer $GITHUB_TOKEN\""
 fi
 
 if [ "$1" = "dev" ]; then
@@ -240,7 +238,7 @@ BuildReleaseFreeBSD() {
   mkdir -p "build/freebsd"
   
   # Get latest FreeBSD 14.x release version from GitHub 
-  freebsd_version=$(curl -fsSL --max-time 2 $githubAuthHeader $githubAuthValue "https://api.github.com/repos/freebsd/freebsd-src/tags" | \
+  freebsd_version=$(eval "curl -fsSL --max-time 2 $githubAuthArgs \"https://api.github.com/repos/freebsd/freebsd-src/tags\"" | \
     jq -r '.[].name' | \
     grep '^release/14\.' | \
     sort -V | \
