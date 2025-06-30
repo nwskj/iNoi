@@ -17,7 +17,7 @@ import (
 	"github.com/OpenListTeam/OpenList/pkg/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/xhofe/tache"
+	"github.com/OpenListTeam/tache"
 )
 
 type TransferTask struct {
@@ -33,7 +33,9 @@ type TransferTask struct {
 }
 
 func (t *TransferTask) Run() error {
-	t.ReinitCtx()
+	if err := t.ReinitCtx(); err != nil {
+		return err
+	}
 	t.ClearEndTime()
 	t.SetStartTime(time.Now())
 	defer func() { t.SetEndTime(time.Now()) }()
