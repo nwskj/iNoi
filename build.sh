@@ -136,7 +136,9 @@ BuildDocker() {
 PrepareBuildDockerMusl() {
   mkdir -p build/musl-libs
   BASE="https://github.com/OpenListTeam/musl-compilers/releases/latest/download/"
-  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross i486-linux-musl-cross armv6-linux-musleabihf-cross armv7l-linux-musleabihf-cross riscv64-linux-musl-cross powerpc64le-linux-musl-cross loongarch64-linux-musl-cross) ## Disable s390x-linux-musl-cross builds
+  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross i486-linux-musl-cross 
+         armv6-linux-musleabihf-cross armv7l-linux-musleabihf-cross 
+         riscv64-linux-musl-cross powerpc64le-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
     lib_tgz="build/${i}.tgz"
@@ -148,40 +150,62 @@ PrepareBuildDockerMusl() {
 
 BuildDockerMultiplatform() {
   go mod download
-
-  # run PrepareBuildDockerMusl before build
+  PrepareBuildDockerMusl
+  
   export PATH=$PATH:$PWD/build/musl-libs/bin
-
   docker_lflags="--extldflags '-static -fpic' $ldflags"
   export CGO_ENABLED=1
 
-  OS_ARCHES=(linux-amd64 linux-arm64 linux-386 linux-riscv64 linux-ppc64le linux-loong64) ## Disable linux-s390x builds
-  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc i486-linux-musl-gcc riscv64-linux-musl-gcc powerpc64le-linux-musl-gcc loongarch64-linux-musl-gcc) ## Disable s390x-linux-musl-gcc builds
-  for i in "${!OS_ARCHES[@]}"; do
-    os_arch=${OS_ARCHES[$i]}
-    cgo_cc=${CGO_ARGS[$i]}
-    os=${os_arch%%-*}
-    arch=${os_arch##*-}
-    export GOOS=$os
-    export GOARCH=$arch
-    export CC=${cgo_cc}
-    echo "building for $os_arch"
-    go build -o build/$os/$arch/"$appName" -ldflags="$docker_lflags" -tags=jsoniter .
+  # 使用关联数组定义架构映射
+  declare -A ARCH_MAP=(
+    ["amd64"]="x86_64-linux-musl-gcc"
+    ["arm64"]="aarch64-linux-musl-gcc"
+    ["386"]="i486-linux-musl-gcc"
+    ["riscv64"]="riscv64-linux-musl-gcc"
+    ["ppc64le"]="powerpc64le-linux-musl-gcc"
+  )
+
+  # 清理旧构建
+  rm -rf build/linux
+  mkdir -p build/linux
+
+  # 构建主要架构
+  for arch in "${!ARCH_MAP[@]}"; do
+    echo "Building for linux/$arch"
+    mkdir -p "build/linux/$arch"
+    export GOOS=linux
+    export GOARCH="$arch"
+    export CC="${ARCH_MAP[$arch]}"
+    
+    if ! go build -trimpath -ldflags="$docker_lflags" -tags=jsoniter -v -p $(nproc) \
+         -o "build/linux/$arch/$appName" .; then
+      echo "Failed to build for linux/$arch"
+      exit 1
+    fi
   done
 
-  DOCKER_ARM_ARCHES=(linux-arm/v6 linux-arm/v7)
-  CGO_ARGS=(armv6-linux-musleabihf-gcc armv7l-linux-musleabihf-gcc)
-  GO_ARM=(6 7)
+  # ARM架构特殊处理
+  declare -A ARM_ARCH_MAP=(
+    ["v6"]="armv6-linux-musleabihf-gcc"
+    ["v7"]="armv7l-linux-musleabihf-gcc"
+  )
+
   export GOOS=linux
   export GOARCH=arm
-  for i in "${!DOCKER_ARM_ARCHES[@]}"; do
-    docker_arch=${DOCKER_ARM_ARCHES[$i]}
-    cgo_cc=${CGO_ARGS[$i]}
-    export GOARM=${GO_ARM[$i]}
-    export CC=${cgo_cc}
-    echo "building for $docker_arch"
-    go build -o build/${docker_arch%%-*}/${docker_arch##*-}/"$appName" -ldflags="$docker_lflags" -tags=jsoniter .
+  for ver in "${!ARM_ARCH_MAP[@]}"; do
+    echo "Building for linux/arm/$ver"
+    mkdir -p "build/linux/arm/$ver"
+    export GOARM="${ver/v/}"
+    export CC="${ARM_ARCH_MAP[$ver]}"
+    
+    if ! go build -trimpath -ldflags="$docker_lflags" -tags=jsoniter -v -p $(nproc) \
+         -o "build/linux/arm/$ver/$appName" .; then
+      echo "Failed to build for linux/arm/$ver"
+      exit 1
+    fi
   done
+
+  echo "All platforms built successfully"
 }
 
 BuildRelease() {
@@ -360,15 +384,15 @@ BuildReleaseLinuxMusl() {
   mkdir -p "build"
   muslflags="--extldflags '-static -fpic' $ldflags"
   BASE="https://github.com/OpenListTeam/musl-compilers/releases/latest/download/"
-  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross mips-linux-musl-cross mips64-linux-musl-cross mips64el-linux-musl-cross mipsel-linux-musl-cross powerpc64le-linux-musl-cross s390x-linux-musl-cross loongarch64-linux-musl-cross)
+  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross mips-linux-musl-cross mips64-linux-musl-cross mips64el-linux-musl-cross mipsel-linux-musl-cross powerpc64le-linux-musl-cross s390x-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
     curl -fsSL -o "${i}.tgz" "${url}"
     sudo tar xf "${i}.tgz" --strip-components 1 -C /usr/local
     rm -f "${i}.tgz"
   done
-  OS_ARCHES=(linux-musl-amd64 linux-musl-arm64 linux-musl-mips linux-musl-mips64 linux-musl-mips64le linux-musl-mipsle linux-musl-ppc64le linux-musl-s390x linux-musl-loong64)
-  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc mips-linux-musl-gcc mips64-linux-musl-gcc mips64el-linux-musl-gcc mipsel-linux-musl-gcc powerpc64le-linux-musl-gcc s390x-linux-musl-gcc loongarch64-linux-musl-gcc)
+  OS_ARCHES=(linux-musl-amd64 linux-musl-arm64 linux-musl-mips linux-musl-mips64 linux-musl-mips64le linux-musl-mipsle linux-musl-ppc64le linux-musl-s390x)
+  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc mips-linux-musl-gcc mips64-linux-musl-gcc mips64el-linux-musl-gcc mipsel-linux-musl-gcc powerpc64le-linux-musl-gcc s390x-linux-musl-gcc)
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}
@@ -553,4 +577,13 @@ elif [ "$1" = "zip" ]; then
   MakeRelease "$2".txt
 else
   echo -e "Parameter error"
+  echo -e "Usage: $0 {dev|beta|release|zip|prepare} [docker|docker-multiplatform|linux_musl_arm|linux_musl|android|freebsd|web] [lite] [other_params]"
+  echo -e "Examples:"
+  echo -e "  $0 dev"
+  echo -e "  $0 dev lite"
+  echo -e "  $0 dev docker"
+  echo -e "  $0 dev docker lite"
+  echo -e "  $0 release"
+  echo -e "  $0 release lite"
+  echo -e "  $0 release docker lite"
 fi

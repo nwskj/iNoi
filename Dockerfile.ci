@@ -1,42 +1,85 @@
+# 使用多阶段构建以减小最终镜像大小
+FROM --platform=$BUILDPLATFORM alpine:edge as builder
+
+# 构建阶段元数据
+LABEL stage=inoi-builder
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+# 安装构建工具
+RUN apk add --no-cache go gcc musl-dev git make
+
+# 复制源码并构建
+WORKDIR /build
+COPY . .
+RUN make build TARGETPLATFORM=$TARGETPLATFORM
+
+# 最终运行时镜像
 FROM alpine:edge
 
-ARG TARGETPLATFORM
+# 参数定义
 ARG INSTALL_FFMPEG=false
 ARG INSTALL_ARIA2=false
 LABEL MAINTAINER="iNoi"
 
+# 设置工作目录
 WORKDIR /opt/inoi/
 
+# 基础运行时依赖
 RUN apk update && \
     apk upgrade --no-cache && \
-    apk add --no-cache bash jq ca-certificates su-exec tzdata  runit; \
-    [ "$INSTALL_FFMPEG" = "true" ] && apk add --no-cache ffmpeg; \
-    [ "$INSTALL_ARIA2" = "true" ] && apk add --no-cache curl aria2 && \
-        mkdir -p /opt/aria2/.aria2 && \
-        wget https://github.com/P3TERX/aria2.conf/archive/refs/heads/master.tar.gz -O /tmp/aria-conf.tar.gz && \
-        tar -zxvf /tmp/aria-conf.tar.gz -C /opt/aria2/.aria2 --strip-components=1 && rm -f /tmp/aria-conf.tar.gz && \
-        sed -i 's|rpc-secret|#rpc-secret|g' /opt/aria2/.aria2/aria2.conf && \
-        sed -i 's|/root/.aria2|/opt/aria2/.aria2|g' /opt/aria2/.aria2/aria2.conf && \
-        sed -i 's|/root/.aria2|/opt/aria2/.aria2|g' /opt/aria2/.aria2/script.conf && \
-        sed -i 's|/root|/opt/aria2|g' /opt/aria2/.aria2/aria2.conf && \
-        sed -i 's|/root|/opt/aria2|g' /opt/aria2/.aria2/script.conf && \
-        mkdir -p /opt/service/stop/aria2/log && \
-        echo '#!/bin/sh' > /opt/service/stop/aria2/run && \
-        echo 'exec 2>&1' >> /opt/service/stop/aria2/run && \
-        echo 'exec aria2c --enable-rpc --rpc-allow-origin-all --conf-path=/opt/aria2/.aria2/aria2.conf' >> /opt/service/stop/aria2/run && \
-        echo '#!/bin/sh' > /opt/service/stop/aria2/log/run && \
-        echo 'mkdir -p /opt/openlist/data/log/aria2 2>/dev/null' >> /opt/service/stop/aria2/log/run && \
-        echo 'exec svlogd /opt/openlist/data/log/aria2' >> /opt/service/stop/aria2/log/run && \
-        chmod +x /opt/service/stop/aria2/run /opt/service/stop/aria2/log/run && \
-        touch /opt/aria2/.aria2/aria2.session && \
-        /opt/aria2/.aria2/tracker.sh ; \
+    apk add --no-cache \
+        bash \
+        jq \
+        ca-certificates \
+        su-exec \
+        tzdata \
+        runit && \
     rm -rf /var/cache/apk/*
 
-COPY --chmod=755 /build/${TARGETPLATFORM}/iNoi ./
+# 条件安装FFmpeg
+RUN if [ "$INSTALL_FFMPEG" = "true" ]; then \
+        apk add --no-cache ffmpeg; \
+    fi
+
+# 条件安装Aria2（带更清晰的错误处理）
+RUN if [ "$INSTALL_ARIA2" = "true" ]; then \
+        apk add --no-cache curl aria2 && \
+        mkdir -p /opt/aria2/.aria2 && \
+        { wget -q https://github.com/P3TERX/aria2.conf/archive/refs/heads/master.tar.gz -O /tmp/aria-conf.tar.gz && \
+          tar -zxf /tmp/aria-conf.tar.gz -C /opt/aria2/.aria2 --strip-components=1 && \
+          rm -f /tmp/aria-conf.tar.gz; } || echo "Aria2配置下载失败，将继续使用默认配置" && \
+        sed -i \
+            -e 's|rpc-secret|#rpc-secret|g' \
+            -e 's|/root/.aria2|/opt/aria2/.aria2|g' \
+            -e 's|/root|/opt/aria2|g' \
+            /opt/aria2/.aria2/aria2.conf \
+            /opt/aria2/.aria2/script.conf && \
+        mkdir -p /opt/service/stop/aria2/log && \
+        printf '#!/bin/sh\nexec 2>&1\nexec aria2c --enable-rpc --rpc-allow-origin-all --conf-path=/opt/aria2/.aria2/aria2.conf\n' > /opt/service/stop/aria2/run && \
+        printf '#!/bin/sh\nmkdir -p /opt/openlist/data/log/aria2 2>/dev/null\nexec svlogd /opt/openlist/data/log/aria2\n' > /opt/service/stop/aria2/log/run && \
+        chmod +x /opt/service/stop/aria2/run /opt/service/stop/aria2/log/run && \
+        touch /opt/aria2/.aria2/aria2.session && \
+        { /opt/aria2/.aria2/tracker.sh || echo "Tracker更新失败"; }; \
+    fi
+
+# 从构建阶段复制二进制文件（自动匹配目标平台）
+COPY --from=builder --chmod=755 /build/bin/${TARGETARCH}${TARGETVARIANT:+/$TARGETVARIANT}/iNoi /opt/inoi/iNoi
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
+
+# 验证版本
 RUN /entrypoint.sh version
 
-ENV PUID=0 PGID=0 UMASK=022 RUN_ARIA2=${INSTALL_ARIA2}
+# 环境配置
+ENV PUID=0 \
+    PGID=0 \
+    UMASK=022 \
+    RUN_ARIA2=${INSTALL_ARIA2}
+
+# 数据卷和端口
 VOLUME /opt/inoi/data/
 EXPOSE 5244 5245
-CMD [ "/entrypoint.sh" ]
+
+# 启动命令
+CMD ["/entrypoint.sh"]
