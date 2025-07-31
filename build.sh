@@ -58,45 +58,6 @@ BuildWinArm64() {
   go build -o "$1" -ldflags="$ldflags" -tags=jsoniter .
 }
 
-BuildWin7() {
-  # Setup Win7 Go compiler (patched version that supports Windows 7)
-  go_version=$(go version | grep -o 'go[0-9]\+\.[0-9]\+\.[0-9]\+' | sed 's/go//')
-  echo "Detected Go version: $go_version"
-  
-  curl -fsSL --retry 3 -o go-win7.zip -H "Authorization: Bearer $GITHUB_TOKEN" \
-    "https://github.com/XTLS/go-win7/releases/download/patched-${go_version}/go-for-win7-linux-amd64.zip"
-  
-  rm -rf go-win7
-  unzip go-win7.zip -d go-win7
-  rm go-win7.zip
-  
-  # Set permissions for all wrapper files
-  chmod +x ./wrapper/zcc-win7
-  chmod +x ./wrapper/zcxx-win7
-  chmod +x ./wrapper/zcc-win7-386
-  chmod +x ./wrapper/zcxx-win7-386
-  
-  # Build for both 386 and amd64 architectures
-  for arch in "386" "amd64"; do
-    echo "building for windows7-${arch}"
-    export GOOS=windows
-    export GOARCH=${arch}
-    export CGO_ENABLED=1
-    
-    # Use architecture-specific wrapper files
-    if [ "$arch" = "386" ]; then
-      export CC=$(pwd)/wrapper/zcc-win7-386
-      export CXX=$(pwd)/wrapper/zcxx-win7-386
-    else
-      export CC=$(pwd)/wrapper/zcc-win7
-      export CXX=$(pwd)/wrapper/zcxx-win7
-    fi
-    
-    # Use the patched Go compiler for Win7 compatibility
-    $(pwd)/go-win7/bin/go build -o "${1}-${arch}.exe" -ldflags="$ldflags" -tags=jsoniter .
-  done
-}
-
 BuildDev() {
   rm -rf .git/
   mkdir -p "dist"
@@ -136,9 +97,7 @@ BuildDocker() {
 PrepareBuildDockerMusl() {
   mkdir -p build/musl-libs
   BASE="https://github.com/OpenListTeam/musl-compilers/releases/latest/download/"
-  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross i486-linux-musl-cross 
-         armv6-linux-musleabihf-cross armv7l-linux-musleabihf-cross 
-         riscv64-linux-musl-cross powerpc64le-linux-musl-cross)
+  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross i486-linux-musl-cross s390x-linux-musl-cross armv6-linux-musleabihf-cross armv7l-linux-musleabihf-cross riscv64-linux-musl-cross powerpc64le-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
     lib_tgz="build/${i}.tgz"
@@ -150,233 +109,52 @@ PrepareBuildDockerMusl() {
 
 BuildDockerMultiplatform() {
   go mod download
-  PrepareBuildDockerMusl
-  
+
+  # run PrepareBuildDockerMusl before build
   export PATH=$PATH:$PWD/build/musl-libs/bin
+
   docker_lflags="--extldflags '-static -fpic' $ldflags"
   export CGO_ENABLED=1
 
-  # 使用关联数组定义架构映射
-  declare -A ARCH_MAP=(
-    ["amd64"]="x86_64-linux-musl-gcc"
-    ["arm64"]="aarch64-linux-musl-gcc"
-    ["386"]="i486-linux-musl-gcc"
-    ["riscv64"]="riscv64-linux-musl-gcc"
-    ["ppc64le"]="powerpc64le-linux-musl-gcc"
-  )
-
-  # 清理旧构建
-  rm -rf build/linux
-  mkdir -p build/linux
-
-  # 构建主要架构
-  for arch in "${!ARCH_MAP[@]}"; do
-    echo "Building for linux/$arch"
-    mkdir -p "build/linux/$arch"
-    export GOOS=linux
-    export GOARCH="$arch"
-    export CC="${ARCH_MAP[$arch]}"
-    
-    if ! go build -trimpath -ldflags="$docker_lflags" -tags=jsoniter -v -p $(nproc) \
-         -o "build/linux/$arch/$appName" .; then
-      echo "Failed to build for linux/$arch"
-      exit 1
-    fi
+  OS_ARCHES=(linux-amd64 linux-arm64 linux-386 linux-s390x linux-riscv64 linux-ppc64le)
+  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc i486-linux-musl-gcc s390x-linux-musl-gcc riscv64-linux-musl-gcc powerpc64le-linux-musl-gcc)
+  for i in "${!OS_ARCHES[@]}"; do
+    os_arch=${OS_ARCHES[$i]}
+    cgo_cc=${CGO_ARGS[$i]}
+    os=${os_arch%%-*}
+    arch=${os_arch##*-}
+    export GOOS=$os
+    export GOARCH=$arch
+    export CC=${cgo_cc}
+    echo "building for $os_arch"
+    go build -o build/$os/$arch/"$appName" -ldflags="$docker_lflags" -tags=jsoniter .
   done
 
-  # ARM架构特殊处理
-  declare -A ARM_ARCH_MAP=(
-    ["v6"]="armv6-linux-musleabihf-gcc"
-    ["v7"]="armv7l-linux-musleabihf-gcc"
-  )
-
+  DOCKER_ARM_ARCHES=(linux-arm/v6 linux-arm/v7)
+  CGO_ARGS=(armv6-linux-musleabihf-gcc armv7l-linux-musleabihf-gcc)
+  GO_ARM=(6 7)
   export GOOS=linux
   export GOARCH=arm
-  for ver in "${!ARM_ARCH_MAP[@]}"; do
-    echo "Building for linux/arm/$ver"
-    mkdir -p "build/linux/arm/$ver"
-    export GOARM="${ver/v/}"
-    export CC="${ARM_ARCH_MAP[$ver]}"
-    
-    if ! go build -trimpath -ldflags="$docker_lflags" -tags=jsoniter -v -p $(nproc) \
-         -o "build/linux/arm/$ver/$appName" .; then
-      echo "Failed to build for linux/arm/$ver"
-      exit 1
-    fi
+  for i in "${!DOCKER_ARM_ARCHES[@]}"; do
+    docker_arch=${DOCKER_ARM_ARCHES[$i]}
+    cgo_cc=${CGO_ARGS[$i]}
+    export GOARM=${GO_ARM[$i]}
+    export CC=${cgo_cc}
+    echo "building for $docker_arch"
+    go build -o build/${docker_arch%%-*}/${docker_arch##*-}/"$appName" -ldflags="$docker_lflags" -tags=jsoniter .
   done
-
-  echo "All platforms built successfully"
 }
 
 BuildRelease() {
   rm -rf .git/
   mkdir -p "build"
   BuildWinArm64 ./build/"$appName"-windows-arm64.exe
-  BuildWin7 ./build/"$appName"-windows7
   xgo -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
   # why? Because some target platforms seem to have issues with upx compression
   # upx -9 ./"$appName"-linux-amd64
   # cp ./"$appName"-windows-amd64.exe ./"$appName"-windows-amd64-upx.exe
   # upx -9 ./"$appName"-windows-amd64-upx.exe
   mv "$appName"-* build
-  
-  # Build LoongArch with glibc (both old world abi1.0 and new world abi2.0)
-  # Separate from musl builds to avoid cache conflicts
-  BuildLoongGLIBC ./build/$appName-linux-loong64-abi1.0 abi1.0
-  BuildLoongGLIBC ./build/$appName-linux-loong64 abi2.0
-}
-
-BuildLoongGLIBC() {
-  local target_abi="$2"
-  local output_file="$1"
-  local oldWorldGoVersion="1.24.3"
-  
-  if [ "$target_abi" = "abi1.0" ]; then
-    echo building for linux-loong64-abi1.0
-  else
-    echo building for linux-loong64-abi2.0
-    target_abi="abi2.0"  # Default to abi2.0 if not specified
-  fi
-  
-  # Note: No longer need global cache cleanup since ABI1.0 uses isolated cache directory
-  echo "Using optimized cache strategy: ABI1.0 has isolated cache, ABI2.0 uses standard cache"
-  
-  if [ "$target_abi" = "abi1.0" ]; then
-    # Setup abi1.0 toolchain and patched Go compiler similar to cgo-action implementation
-    echo "Setting up Loongson old-world ABI1.0 toolchain and patched Go compiler..."
-    
-    # Download and setup patched Go compiler for old-world
-    if ! curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-      "https://github.com/loong64/loong64-abi1.0-toolchains/releases/download/20250722/go${oldWorldGoVersion}.linux-amd64.tar.gz" \
-      -o go-loong64-abi1.0.tar.gz; then
-      echo "Error: Failed to download patched Go compiler for old-world ABI1.0"
-      if [ -n "$GITHUB_TOKEN" ]; then
-        echo "Error output from curl:"
-        curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-          "https://github.com/loong64/loong64-abi1.0-toolchains/releases/download/20250722/go${oldWorldGoVersion}.linux-amd64.tar.gz" \
-          -o go-loong64-abi1.0.tar.gz || true
-      fi
-      return 1
-    fi
-    
-    rm -rf go-loong64-abi1.0
-    mkdir go-loong64-abi1.0
-    if ! tar -xzf go-loong64-abi1.0.tar.gz -C go-loong64-abi1.0 --strip-components=1; then
-      echo "Error: Failed to extract patched Go compiler"
-      return 1
-    fi
-    rm go-loong64-abi1.0.tar.gz
-    
-    # Download and setup GCC toolchain for old-world
-    if ! curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-      "https://github.com/loong64/loong64-abi1.0-toolchains/releases/download/20250722/loongson-gnu-toolchain-8.3.novec-x86_64-loongarch64-linux-gnu-rc1.1.tar.xz" \
-      -o gcc8-loong64-abi1.0.tar.xz; then
-      echo "Error: Failed to download GCC toolchain for old-world ABI1.0"
-      if [ -n "$GITHUB_TOKEN" ]; then
-        echo "Error output from curl:"
-        curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-          "https://github.com/loong64/loong64-abi1.0-toolchains/releases/download/20250722/loongson-gnu-toolchain-8.3.novec-x86_64-loongarch64-linux-gnu-rc1.1.tar.xz" \
-          -o gcc8-loong64-abi1.0.tar.xz || true
-      fi
-      return 1
-    fi
-    
-    rm -rf gcc8-loong64-abi1.0
-    mkdir gcc8-loong64-abi1.0
-    if ! tar -Jxf gcc8-loong64-abi1.0.tar.xz -C gcc8-loong64-abi1.0 --strip-components=1; then
-      echo "Error: Failed to extract GCC toolchain"
-      return 1
-    fi
-    rm gcc8-loong64-abi1.0.tar.xz
-    
-    # Setup separate cache directory for ABI1.0 to avoid cache pollution
-    abi1_cache_dir="$(pwd)/go-loong64-abi1.0-cache"
-    mkdir -p "$abi1_cache_dir"
-    echo "Using separate cache directory for ABI1.0: $abi1_cache_dir"
-    
-    # Use patched Go compiler for old-world build (critical for ABI1.0 compatibility)
-    echo "Building with patched Go compiler for old-world ABI1.0..."
-    echo "Using isolated cache directory: $abi1_cache_dir"
-    
-    # Use env command to set environment variables locally without affecting global environment
-    if ! env GOOS=linux GOARCH=loong64 \
-        CC="$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-gcc" \
-        CXX="$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-g++" \
-        CGO_ENABLED=1 \
-        GOCACHE="$abi1_cache_dir" \
-        $(pwd)/go-loong64-abi1.0/bin/go build -a -o "$output_file" -ldflags="$ldflags" -tags=jsoniter .; then
-      echo "Error: Build failed with patched Go compiler"
-      echo "Attempting retry with cache cleanup..."
-      env GOCACHE="$abi1_cache_dir" $(pwd)/go-loong64-abi1.0/bin/go clean -cache
-      if ! env GOOS=linux GOARCH=loong64 \
-          CC="$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-gcc" \
-          CXX="$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-g++" \
-          CGO_ENABLED=1 \
-          GOCACHE="$abi1_cache_dir" \
-          $(pwd)/go-loong64-abi1.0/bin/go build -a -o "$output_file" -ldflags="$ldflags" -tags=jsoniter .; then
-        echo "Error: Build failed again after cache cleanup"
-        echo "Build environment details:"
-        echo "GOOS=linux"
-        echo "GOARCH=loong64" 
-        echo "CC=$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-gcc"
-        echo "CXX=$(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-g++"
-        echo "CGO_ENABLED=1"
-        echo "GOCACHE=$abi1_cache_dir"
-        echo "Go version: $($(pwd)/go-loong64-abi1.0/bin/go version)"
-        echo "GCC version: $($(pwd)/gcc8-loong64-abi1.0/bin/loongarch64-linux-gnu-gcc --version | head -1)"
-        return 1
-      fi
-    fi
-  else
-    # Setup abi2.0 toolchain for new world glibc build
-    echo "Setting up new-world ABI2.0 toolchain..."
-    if ! curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-      "https://github.com/loong64/cross-tools/releases/download/20250507/x86_64-cross-tools-loongarch64-unknown-linux-gnu-legacy.tar.xz" \
-      -o gcc12-loong64-abi2.0.tar.xz; then
-      echo "Error: Failed to download GCC toolchain for new-world ABI2.0"
-      if [ -n "$GITHUB_TOKEN" ]; then
-        echo "Error output from curl:"
-        curl -fsSL --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-          "https://github.com/loong64/cross-tools/releases/download/20250507/x86_64-cross-tools-loongarch64-unknown-linux-gnu-legacy.tar.xz" \
-          -o gcc12-loong64-abi2.0.tar.xz || true
-      fi
-      return 1
-    fi
-    
-    rm -rf gcc12-loong64-abi2.0
-    mkdir gcc12-loong64-abi2.0
-    if ! tar -Jxf gcc12-loong64-abi2.0.tar.xz -C gcc12-loong64-abi2.0 --strip-components=1; then
-      echo "Error: Failed to extract GCC toolchain"
-      return 1
-    fi
-    rm gcc12-loong64-abi2.0.tar.xz
-    
-    export GOOS=linux
-    export GOARCH=loong64
-    export CC=$(pwd)/gcc12-loong64-abi2.0/bin/loongarch64-unknown-linux-gnu-gcc
-    export CXX=$(pwd)/gcc12-loong64-abi2.0/bin/loongarch64-unknown-linux-gnu-g++
-    export CGO_ENABLED=1
-    
-    # Use standard Go compiler for new-world build
-    echo "Building with standard Go compiler for new-world ABI2.0..."
-    if ! go build -a -o "$output_file" -ldflags="$ldflags" -tags=jsoniter .; then
-      echo "Error: Build failed with standard Go compiler"
-      echo "Attempting retry with cache cleanup..."
-      go clean -cache
-      if ! go build -a -o "$output_file" -ldflags="$ldflags" -tags=jsoniter .; then
-        echo "Error: Build failed again after cache cleanup"
-        echo "Build environment details:"
-        echo "GOOS=$GOOS"
-        echo "GOARCH=$GOARCH"
-        echo "CC=$CC"
-        echo "CXX=$CXX"
-        echo "CGO_ENABLED=$CGO_ENABLED"
-        echo "Go version: $(go version)"
-        echo "GCC version: $($CC --version | head -1)"
-        return 1
-      fi
-    fi
-  fi
 }
 
 BuildReleaseLinuxMusl() {
@@ -384,15 +162,15 @@ BuildReleaseLinuxMusl() {
   mkdir -p "build"
   muslflags="--extldflags '-static -fpic' $ldflags"
   BASE="https://github.com/OpenListTeam/musl-compilers/releases/latest/download/"
-  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross mips-linux-musl-cross mips64-linux-musl-cross mips64el-linux-musl-cross mipsel-linux-musl-cross powerpc64le-linux-musl-cross s390x-linux-musl-cross)
+  FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross mips-linux-musl-cross mips64-linux-musl-cross mips64el-linux-musl-cross mipsel-linux-musl-cross powerpc64le-linux-musl-cross s390x-linux-musl-cross loongarch64-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
     curl -fsSL -o "${i}.tgz" "${url}"
     sudo tar xf "${i}.tgz" --strip-components 1 -C /usr/local
     rm -f "${i}.tgz"
   done
-  OS_ARCHES=(linux-musl-amd64 linux-musl-arm64 linux-musl-mips linux-musl-mips64 linux-musl-mips64le linux-musl-mipsle linux-musl-ppc64le linux-musl-s390x)
-  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc mips-linux-musl-gcc mips64-linux-musl-gcc mips64el-linux-musl-gcc mipsel-linux-musl-gcc powerpc64le-linux-musl-gcc s390x-linux-musl-gcc)
+  OS_ARCHES=(linux-musl-amd64 linux-musl-arm64 linux-musl-mips linux-musl-mips64 linux-musl-mips64le linux-musl-mipsle linux-musl-ppc64le linux-musl-s390x linux-musl-loong64)
+  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc mips-linux-musl-gcc mips64-linux-musl-gcc mips64el-linux-musl-gcc mipsel-linux-musl-gcc powerpc64le-linux-musl-gcc s390x-linux-musl-gcc loongarch64-linux-musl-gcc)
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}
@@ -433,7 +211,6 @@ BuildReleaseLinuxMuslArm() {
     go build -o ./build/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
   done
 }
-
 
 BuildReleaseAndroid() {
   rm -rf .git/
@@ -523,7 +300,7 @@ MakeRelease() {
     tar -czvf compress/"$i".tar.gz "$appName"
     rm -f "$appName"
   done
-  for i in $(find . -type f \( -name "$appName-windows-*" -o -name "$appName-windows7-*" \)); do
+  for i in $(find . -type f -name "$appName-windows-*"); do
     cp "$i" "$appName".exe
     zip compress/$(echo $i | sed 's/\.[^.]*$//').zip "$appName".exe
     rm -f "$appName".exe
@@ -577,13 +354,4 @@ elif [ "$1" = "zip" ]; then
   MakeRelease "$2".txt
 else
   echo -e "Parameter error"
-  echo -e "Usage: $0 {dev|beta|release|zip|prepare} [docker|docker-multiplatform|linux_musl_arm|linux_musl|android|freebsd|web] [lite] [other_params]"
-  echo -e "Examples:"
-  echo -e "  $0 dev"
-  echo -e "  $0 dev lite"
-  echo -e "  $0 dev docker"
-  echo -e "  $0 dev docker lite"
-  echo -e "  $0 release"
-  echo -e "  $0 release lite"
-  echo -e "  $0 release docker lite"
 fi
