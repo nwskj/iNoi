@@ -93,7 +93,7 @@ func InitialSettings() []model.SettingItem {
 	} else {
 		token = random.Token()
 	}
-	siteVersion := fmt.Sprintf("%s (Commit: %s) - Frontend: %s - Build at: %s", conf.Version, conf.GitCommit, conf.WebVersion, conf.BuiltAt)
+	siteVersion := fmt.Sprintf("%s - Frontend: %s", conf.Version, conf.WebVersion)
 	initialSettingItems := []model.SettingItem{
 		// site settings
 		{Key: conf.VERSION, Value: siteVersion, Type: conf.TypeString, Group: model.SITE, Flag: model.READONLY},
